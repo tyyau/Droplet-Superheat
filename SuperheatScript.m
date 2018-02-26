@@ -178,4 +178,11 @@ Comp_Prop = [C2H5OH_Prop NC10H22_Prop];
 Antoine = [Ant_C2H5OH Ant_NC10H22];
 P0 = 1;
 KineticModel(Comp_Prop, Antoine, W_Comp, t, r, T, P0, 0)
+%%
+load('Data/hept50hex50_2bar.mat')
+W_Comp = [W_NC16H34 W_NC7H16];
+Comp_Prop = [NC16H34_Prop NC7H16_Prop];
+Antoine = [Ant_NC16H34 Ant_NC7H16];
+P0 = 2;
+KineticModel(Comp_Prop, Antoine, W_Comp, t, r, T, P0, 0)
 
