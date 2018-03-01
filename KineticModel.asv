@@ -170,9 +170,8 @@ P_diff_c = P_diff_m(1,:);
 sigma_c = sigma_m(1,:);
 mu_c = mu_m(1,:);
 
-% drc_dt = 1/(t_m(1, index) - t_m(1, index-1)) * ...
-%     (2*sigma_m(1, index)/(P_diff_m(1,index)) - 2*sigma_m(1, index-1)/(P_diff_m(1,index-1)));
-drc_dt = 0;
+drc_dt = 1/(t_m(1, index) - t_m(1, index-1)) * ...
+    (2*sigma_m(1, index)/(P_diff_m(1,index)) - 2*sigma_m(1, index-1)/(P_diff_m(1,index-1)));
 
 r_init = [Rc drc_dt];
 
@@ -218,11 +217,8 @@ xlabel('time [s]');
 ylabel('radius [mm]');
 zlabel('temperature [K]');
 
-figure
-plot(t2_f, r_f(:,1));
-xlabel('time [s]');
-ylabel('radius [mm?]');
-
+plot
+figure(t2f, r_f(:,1)
 MinTempDiff = min(min(T_d))
 
 end
