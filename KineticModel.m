@@ -17,6 +17,13 @@ C_k = Antoine(3,:);
 
 M_fuel = sum(M_k);
 
+% 1: paraffins, 2: olefins, 3:cyclopentatnes, 4:cyclohexanes, 5:aromatics
+B_tc = [-2.879*10, 6.075*10^-2, -3.777*10^-5; ...
+        -3.033*10, 6.571*10^-2, -4.173*10^-5;
+        -1.242*10, 1.305*10^-2, -3.296*10^-6;
+        -1.155*10, 1.092*10^-2, -2.022^10^-6;
+        -1.298*10, 1.300*10^-2, -2.499*10^-6];
+
 Patm = 1.01325 * 10^5; % convert bar to Pa
 Pl = P0 * 10^5; % convert bar to Pa
 
@@ -44,7 +51,7 @@ J_i = zeros(length(t), 1);
 sigma = zeros(length(t), 1);
 P_diff = zeros(length(t), 1);
 rho = zeros(length(t), 1);
-
+mu = zeros(length(t), 1);
 for i = 1:length(t)
     % Find mole fractions
     m_Comp = zeros(1, n);
@@ -100,7 +107,13 @@ for i = 1:length(t)
 %     log_J = log(gamma*N0*kf)-dA/k/T(i)
 %     J = exp(log_J)
     J_i(i) = gamma*N0*exp(-dA/k/T(i))*kf;
-
+   
+    % Find viscosity
+    type = 1;
+    b_k = B_tc(type, 1) + B_tc(type, 2)*Tc_k + B_tc(type, 3)*Tc_k.^2;
+    mu_k = (exp(100*(0.01*T(i).^b_k)) - 0.8) * 1000;
+    mu(i) = exp(log(mu_k)*x_Comp');
+    
     % Find superheat temperature of mixture for constant pressure
     T_sl_p0(i) = (x_Comp * Tro') * Tc_Li;
     % Find single component superheat temperature
@@ -122,6 +135,7 @@ J_im = reshape(J_i, pts, []);
 sigma_m = reshape(sigma, pts, []);
 P_diff_m = reshape(P_diff, pts, []);
 rho_m = reshape(rho, pts, []);
+mu_m = reshape(mu, pts, []);
 
 t_f = 0;
 J_tot = 0;
@@ -154,9 +168,11 @@ t_c = t_m(1,:);
 rho_c = rho_m(1,:);
 P_diff_c = P_diff_m(1,:);
 sigma_c = sigma_m(1,:);
+mu_c = mu_m(1,:);
 
-drc_dt = 1/(t_m(1, index) - t_m(1, index-1)) * ...
-    (2*sigma_m(1, index)/(P_diff_m(1,index)) - 2*sigma_m(1, index-1)/(P_diff_m(1,index-1)));
+% drc_dt = 1/(t_m(1, index) - t_m(1, index-1)) * ...
+%     (2*sigma_m(1, index)/(P_diff_m(1,index)) - 2*sigma_m(1, index-1)/(P_diff_m(1,index-1)));
+drc_dt = 0;
 
 r_init = [Rc drc_dt];
 
@@ -166,13 +182,14 @@ function drdt = eq(t,r)
     P_diff_l = interp1(t_c, P_diff_c, t);
     rho_l = interp1(t_c, rho_c, t);
     sigma_l = interp1(t_c, sigma_c, t);
+    mu_l = interp1(t_c, mu_c, t);
     % ODE from Park 2005 -> Young 1989
-    d2rdt2 =1/r(1)*(-3/2*r(2)^2+1/rho_l*(P_diff_l - r(1)*mu/r(1)*r(2)-2*sigma_c/r(1)));
-    drdt = [r(2) dthdotdt]';
+    d2rdt2 =1/r(1)*(-3/2*r(2)^2+1/rho_l*(P_diff_l - r(1)*mu_l/r(1)*r(2)-2*sigma_l/r(1)));
+    drdt = [r(2) d2rdt2]';
 end
 
-[t_f, r_f] = ode45(@eq, t_indices, r_init);
-t_f
+[t2_f, r_f] = ode45(@eq, t_indices, r_init);
+t2_f
 r_f
 
 figure
@@ -200,6 +217,11 @@ mesh(t_m, r_m, T_d);
 xlabel('time [s]');
 ylabel('radius [mm]');
 zlabel('temperature [K]');
+
+figure
+plot(t2_f, r_f(:,1));
+xlabel('time [s]');
+ylabel('radius [mm?]');
 
 MinTempDiff = min(min(T_d))
 
