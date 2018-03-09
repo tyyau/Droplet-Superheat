@@ -1,0 +1,3 @@
+[submodule "include/CorrelationProp"]
+	path = include/CorrelationProp
+	url = https://github.com/gpavanb/CorrelationProp.git
