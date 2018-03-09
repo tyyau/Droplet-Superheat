@@ -1,4 +1,4 @@
-function [MinTempDiff, t_f] = KineticModel(Comp_Prop, Antoine, W_Comp, t, r, T, P0, c)
+function [MinTempDiff, t_f, t3_f, rout] = KineticModel(Comp_Prop, Antoine, W_Comp, t, r, T, P0, c)
 % W_Comp = [w_IC8H18 w_TMBENZ w_NPBENZ w_NC12H26];
 % Comp_Prop = [IC8H18_Prop TMBENZ_Prop NPBENZ_Prop NC12H26_Prop];
 % Comp_Prop -> (1)=M, (2)=Tc, (3)=Pc, (4)=Vc 
@@ -52,6 +52,8 @@ sigma = zeros(length(t), 1);
 P_diff = zeros(length(t), 1);
 rho = zeros(length(t), 1);
 mu = zeros(length(t), 1);
+
+T(1:pts) = T(1:pts) - 10^-4;
 for i = 1:length(t)
     % Find mole fractions
     m_Comp = zeros(1, n);
@@ -91,7 +93,9 @@ for i = 1:length(t)
     T_ratio_Li = min(1, T(i)/Tc_Li);
     % Note: Surface tension(mN/m) correlation uses pressure in bars
     sigma(i) = beta * (Pc_avg/10^5)^(2/3) * Tc_Li^(1/3) * (1-T_ratio_Li)^(11/9) * 10^-3; 
-
+    
+    sigma(i) = 60 *.001;
+    
     % Energy of critical size nucleus
     dA = 16/3*pi*sigma(i)^3/(P_diff(i))^2; % Is Pe too small?
     %dA = 16/3*pi*sigma^3/(Pv-Pl)^2;
@@ -108,10 +112,11 @@ for i = 1:length(t)
 %     J = exp(log_J)
     J_i(i) = gamma*N0*exp(-dA/k/T(i))*kf;
    
-    % Find viscosity
+    % Find viscosity (Mehrohtra 1991)
     type = 1;
     b_k = B_tc(type, 1) + B_tc(type, 2)*Tc_k + B_tc(type, 3)*Tc_k.^2;
-    mu_k = (exp(100*(0.01*T(i).^b_k)) - 0.8) * 1000;
+%    mu_k = (exp(100*(0.01*T(i).^b_k)) - 0.8) / 1000;
+    mu_k = exp(-3.7188+578.919/(-137.546+T(i))) / 1000;
     mu(i) = exp(log(mu_k)*x_Comp');
     
     % Find superheat temperature of mixture for constant pressure
@@ -160,16 +165,18 @@ end
 t_f
 J_tot
 % Critical radius
-Rc = 2*sigma_m(1, index)/(P_diff_m(1,index));
+index = 1
+Rc = 2*sigma_m(1, index)/(P_diff_m(1,index))
 
 t_indices = t_m(1,index:end);
 % Values at center
 t_c = t_m(1,:);
-rho_c = rho_m(1,:);
-P_diff_c = P_diff_m(1,:);
-sigma_c = sigma_m(1,:);
-mu_c = mu_m(1,:);
+rho_c = rho_m(1,:)
+P_diff_c = P_diff_m(1,:)
+sigma_c = sigma_m(1,:)
+mu_c = mu_m(1,:)
 
+Rc2 = 2*sigma_m(1, index+1)/(P_diff_m(1,index+1));
 % drc_dt = 1/(t_m(1, index) - t_m(1, index-1)) * ...
 %     (2*sigma_m(1, index)/(P_diff_m(1,index)) - 2*sigma_m(1, index-1)/(P_diff_m(1,index-1)));
 drc_dt = 0;
@@ -184,13 +191,18 @@ function drdt = eq(t,r)
     sigma_l = interp1(t_c, sigma_c, t);
     mu_l = interp1(t_c, mu_c, t);
     % ODE from Park 2005 -> Young 1989
-    d2rdt2 =1/r(1)*(-3/2*r(2)^2+1/rho_l*(P_diff_l - r(1)*mu_l/r(1)*r(2)-2*sigma_l/r(1)));
+    d2rdt2 = 1/r(1)*(-3/2*r(2)^2+1/rho_l*(P_diff_l - 4*mu_l/r(1)*r(2)-2*sigma_l/r(1)));
     drdt = [r(2) d2rdt2]';
 end
 
-[t2_f, r_f] = ode45(@eq, t_indices, r_init);
-t2_f
-r_f
+% [t2_f, r_f] = ode45(@eq, t_indices, r_init);
+% t2_f
+% r_f
+
+t_test = [t_indices(1):.00001:t_indices(end)];
+[t3_f, r3_f] = ode45(@eq, t_test, r_init);
+
+% load('Data/water_droplet_data.mat')
 
 figure
 hold on
@@ -218,11 +230,15 @@ xlabel('time [s]');
 ylabel('radius [mm]');
 zlabel('temperature [K]');
 
+% figure
+% plot(t2_f, r_f(:,1));
+% xlabel('time [s]');
+% ylabel('radius [mm?]');
 figure
-plot(t2_f, r_f(:,1));
+plot(t3_f, r3_f(:,1));
 xlabel('time [s]');
 ylabel('radius [mm?]');
-
+rout = r3_f(:,1);
 MinTempDiff = min(min(T_d))
 
 end

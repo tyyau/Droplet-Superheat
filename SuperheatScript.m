@@ -185,4 +185,25 @@ Comp_Prop = [NC16H34_Prop NC7H16_Prop];
 Antoine = [Ant_NC16H34 Ant_NC7H16];
 P0 = 2;
 KineticModel(Comp_Prop, Antoine, W_Comp, t, r, T, P0, 0)
+%%
+load('Data/water_9K.mat')
+W_Comp = [W_H2O];
+Comp_Prop = [H2O_Prop];
+Antoine = [Ant_H2O];
+P0 = .3866;
+[~,~,tf1,rf1]=KineticModel(Comp_Prop, Antoine, W_Comp, t, r, T, P0, 0);
 
+load('Data/water_11K.mat')
+W_Comp = [W_H2O];
+Comp_Prop = [H2O_Prop];
+Antoine = [Ant_H2O];
+P0 = .1266;
+[~,~,tf2,rf2]=KineticModel(Comp_Prop, Antoine, W_Comp, t, r, T, P0, 0);
+
+load('Data/water_droplet_data.mat')
+
+plot(tf1,rf1*10,tf2,rf2*10,t_circle, r_circle, '*', t_square, r_square, '*',t_circlez, r_circlez, '--',t_squarez, r_squarez, '--');
+ylabel('radius[cm]');
+xlabel('time[s]');
+legend('P = 38kPa', 'P = 13kPa', 'P = 38kPa', 'P = 13kPa');
+title('Water bubble growth verification');
