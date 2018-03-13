@@ -13,7 +13,7 @@ M_fuel = sum(M_k);
 
 % Tsl/Tcr ratio
 % Tro = ((0.11*P0./Pc_k)+0.89);
-Tro = 1-.111*(1-min(1, P0./Pc_k)).^0.858; % Law
+Tro = 1-.111*(1-min(1, P0./Pc_k)).^0.858; % Law 1978 AIChE  - Cap to 1
 
 % Find # of points per time step
 for i = 1:length(t)-1
@@ -49,6 +49,7 @@ for i = 1:length(t)
     % Find single component superheat temperature
     if c ~= 0
         N = 0;
+        % CST 1977 Law
         T_sl_c(i) = Tc_k(c).*((27/32)^1/(N+1)+P0./Pc_k(c)/((N+1)*8));
     end
     % Difference in temperature between superheat and actual

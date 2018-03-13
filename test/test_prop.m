@@ -1,7 +1,7 @@
 clc; clear all; close all;
 
 % ADD PATHS
-addpath('../include');
+addpath('../include/CorrelationProp');
 
 % PALETTE AND INITIAL LIST MUST BE INPUT FOR CORRELATION MODE
 % palette = funcName;
@@ -17,6 +17,7 @@ fuel = CorrelationProp(palette,initList);
 disp(palette);
 fprintf('MW = %s\n',sprintf('%.4g ',fuel.MW));
 fprintf('Tc = %s\n',sprintf('%.4g ',fuel.TcVec));
+fprintf('Pc = %s\n',sprintf('%.4g ',fuel.PcVec));
 fprintf('Acentric = %s\n',sprintf('%.4g ',fuel.omegaVec));
 fprintf('Latent Heat = %s\n',sprintf('%.4g ',fuel.L(T)));
 fprintf('Specific Heat = %s\n',sprintf('%.4g ',fuel.c_l(T)));
