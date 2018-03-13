@@ -1,32 +1,18 @@
-function [MinTempDiff, t_f, t3_f, rout] = KineticModel(Comp_Prop, Antoine, W_Comp, t, r, T, P0, c)
-% W_Comp = [w_IC8H18 w_TMBENZ w_NPBENZ w_NC12H26];
-% Comp_Prop = [IC8H18_Prop TMBENZ_Prop NPBENZ_Prop NC12H26_Prop];
-% Comp_Prop -> (1)=M, (2)=Tc, (3)=Pc, (4)=Vc 
+function [MinTempDiff, t_f, t3_f, rout] = KineticModel(fuel, W_Comp, t, r, T, P0, c)
+% INPUT
+% P0 - Initial ambient pressure (Pa)
+% T - Temperature vector (K)
 
+% LOAD PROPERTIES
 n = size(W_Comp, 2); %  n = number of components
-M_k = Comp_Prop(1,:);
-Tc_k = Comp_Prop(2,:);
-Pc_k = Comp_Prop(3,:) * 10^5; % convert bar to Pa
-Vc_k = Comp_Prop(4,:) * .001; % convert l/mol to m^3/mol
-om_k = Comp_Prop(5,:);
-Tb_k = Comp_Prop(6,:);
+M_k = fuel.MW; % Kg/mol
+Tc_k = fuel.TcVec; % K
+Pc_k = fuel.PcVec; % Pa 
+rhoc_k = fuel.rhocVec; % Kg/m^3
 
-A_k = Antoine(1,:);
-B_k = Antoine(2,:);
-C_k = Antoine(3,:);
-
-M_fuel = sum(M_k);
-
-% 1: paraffins, 2: olefins, 3:cyclopentatnes, 4:cyclohexanes, 5:aromatics
-B_tc = [-2.879*10, 6.075*10^-2, -3.777*10^-5; ...
-        -3.033*10, 6.571*10^-2, -4.173*10^-5;
-        -1.242*10, 1.305*10^-2, -3.296*10^-6;
-        -1.155*10, 1.092*10^-2, -2.022^10^-6;
-        -1.298*10, 1.300*10^-2, -2.499*10^-6];
-
+% TODO : Remove this. Used for Sigma
 Patm = 1.01325 * 10^5; % convert bar to Pa
-Pl = P0 * 10^5; % convert bar to Pa
-
+% TODO : Clean this
 % Tsl/Tcr ratio
 % Tro = ((0.11*P0./Pc_k)+0.89);
 P0_ratio = min(1, P0./Pc_k);
@@ -53,9 +39,10 @@ P_diff = zeros(length(t), 1);
 rho = zeros(length(t), 1);
 mu = zeros(length(t), 1);
 
-T(1:pts) = T(1:pts) - 10^-4;
+% Initial temperature perturbation to onset bubble
+% Depends on OpenSMOKE timestep
 for i = 1:length(t)
-    % Find mole fractions
+    % Find mass fractions
     m_Comp = zeros(1, n);
     for k = 1:n
         m_Comp(k) = W_Comp(i,k) / M_k(k);
@@ -67,35 +54,22 @@ for i = 1:length(t)
     end
 
     % Find critical mixture temperature from Li equation
-    phi_tot = x_Comp * Vc_k';
-    Tc_Li = sum(Tc_k .* x_Comp .* Vc_k)/ phi_tot;
+    Tc_mix = dot(Tc_k .* x_Comp, 1./rhoc_k)/ dot(x_Comp,(1./rhoc_k));
     
-    % Find specific volume from Yamada-Gunn modified Rackett Equation
-    T_ratio = min(T(i)./Tc_k, 1);
-    v_k = Vc_k.*(0.29056-0.08775.*om_k).^(1 - T_ratio).^(2/7);
-    v_Comp = W_Comp(i,:) * v_k';
-    N0 = 6.023*10^23 / v_Comp;
-    rho(i) = x_Comp * M_k' / v_Comp;
+    % Find mixture density
+    rho(i) = dot(x_Comp,M_k)./dot(x_Comp,fuel.specVol(T(i)));
     
-    % Find pressure from Antoine equation
-    Pv_k = 10.^(A_k-B_k./(T(i)+C_k)) * 133.3224; % convert mmHg to Pa
-    Pv = x_Comp * Pv_k';
-    R = 8.314;
-    Pe = Pv * exp(v_Comp*(Pl - Pv)/(R*T(i))); % conversion to bubble pressure, valid?
-    Pg = Pv;
-    P_diff(i) = Pg - Pl;
+    % Find saturated vapor pressure
+    % TODO : Liquid pressure set to default ambient currently
+    Pv = dot(x_Comp,fuel.Psat(T(i)));
+    Pl = P0; P_diff(i) = Pv - Pl;
     
-    % Find surface tension from Avedisian+Glassman
-    Pc_avg = x_Comp * Pc_k';
-    Tb_avg = x_Comp * Tb_k';
-    sm = Tb_avg/(Tc_Li-Tb_avg) * log(Pc_avg/Patm); % Tc or Tb on top??
-    beta = -.4412 + .2003*sm - 0.00516*sm.^2;
-    T_ratio_Li = min(1, T(i)/Tc_Li);
-    % Note: Surface tension(mN/m) correlation uses pressure in bars
-    sigma(i) = beta * (Pc_avg/10^5)^(2/3) * Tc_Li^(1/3) * (1-T_ratio_Li)^(11/9) * 10^-3; 
+    % Find Surface Tension
+    sigma(i) = dot(x_Comp, fuel.sigma(T(i)));
     
-    sigma(i) = 60 *.001;
-    
+    % Find viscosity
+    mu(i) = dot(x_Comp, fuel.etaL(T(i)));
+   
     % Energy of critical size nucleus
     dA = 16/3*pi*sigma(i)^3/(P_diff(i))^2; % Is Pe too small?
     %dA = 16/3*pi*sigma^3/(Pv-Pl)^2;
@@ -103,24 +77,19 @@ for i = 1:length(t)
     % Collision frequency
     k = 1.3806*10^-23;
     y_m = W_Comp(i,:) * M_k.^(1/2)';
-    kf = 8*Pg*sigma(i)^2/(P_diff(i))^2*(2*pi/k/T(i))^(1/2) * y_m;
+    kf = 8*Pv*sigma(i)^2/(P_diff(i))^2*(2*pi/k/T(i))^(1/2) * y_m;
     
     % Nucleation rate
+    % TODO : Validate with Glassman
     gamma = 1;
+    N0 = 6.023*10^23 / dot(x_Comp,fuel.specVol(T(i)));
 %     J = gamma*N0*exp(-dA/k/T(i))*kf;
 %     log_J = log(gamma*N0*kf)-dA/k/T(i)
 %     J = exp(log_J)
     J_i(i) = gamma*N0*exp(-dA/k/T(i))*kf;
-   
-    % Find viscosity (Mehrohtra 1991)
-    type = 1;
-    b_k = B_tc(type, 1) + B_tc(type, 2)*Tc_k + B_tc(type, 3)*Tc_k.^2;
-%    mu_k = (exp(100*(0.01*T(i).^b_k)) - 0.8) / 1000;
-    mu_k = exp(-3.7188+578.919/(-137.546+T(i))) / 1000;
-    mu(i) = exp(log(mu_k)*x_Comp');
     
     % Find superheat temperature of mixture for constant pressure
-    T_sl_p0(i) = (x_Comp * Tro') * Tc_Li;
+    T_sl_p0(i) = (x_Comp * Tro') * Tc_mix;
     % Find single component superheat temperature
     if c ~= 0
         N = 0;
@@ -142,6 +111,7 @@ P_diff_m = reshape(P_diff, pts, []);
 rho_m = reshape(rho, pts, []);
 mu_m = reshape(mu, pts, []);
 
+% Predict onset of bubble growth (6.80 - Zeng)
 t_f = 0;
 J_tot = 0;
 brk = false;
@@ -165,8 +135,9 @@ end
 t_f
 J_tot
 % Critical radius
-index = 1
 Rc = 2*sigma_m(1, index)/(P_diff_m(1,index))
+
+% TODO : Get surface viscosity from Zeng
 
 t_indices = t_m(1,index:end);
 % Values at center
@@ -179,6 +150,7 @@ mu_c = mu_m(1,:)
 Rc2 = 2*sigma_m(1, index+1)/(P_diff_m(1,index+1));
 % drc_dt = 1/(t_m(1, index) - t_m(1, index-1)) * ...
 %     (2*sigma_m(1, index)/(P_diff_m(1,index)) - 2*sigma_m(1, index-1)/(P_diff_m(1,index-1)));
+% TODO : What is this number?
 drc_dt = 0;
 
 r_init = [Rc drc_dt];
